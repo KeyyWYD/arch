@@ -114,6 +114,11 @@ install_base_system() {
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /mnt/etc/fstab
 
+  # Re-mount filesystem
+  umount -A --recursive /mnt
+  mount "$partition2" /mnt
+  mount "$partition1" /mnt/boot
+
   #Create Swapfile if >=8GB
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
   if [[  $TOTAL_MEM -le 8000000 ]]; then
