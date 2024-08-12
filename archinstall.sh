@@ -140,6 +140,7 @@ format_and_mount() {
 # Install base system
 install_base_system() {
   vendor=$(grep 'vendor_id' /proc/cpuinfo | head -n 1 | awk '{print $3}')
+  audio_card=$(lspci -k | grep -i -E 'audio|sound' | head -n 1 | awk '{print $5}')
 
   if [ "$vendor" = "GenuineIntel" ]; then
     ucode="intel-ucode"
@@ -179,6 +180,8 @@ install_base_system() {
   partition2="$2"
   # CPU vendor
   vendor="$3"
+  # Audio
+  audio_card="$4"
 
   configure_system() {
 
@@ -320,7 +323,6 @@ install_base_system() {
     blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
 
     # Audio power save
-    audio_card=$(lspci -k | grep -i -E 'audio|sound' | head -n 1 | awk '{print $5}')
     case "$audio_card" in
       *Intel*)
         echo "options snd_hda_intel power_save=1" > /etc/modprobe.d/audio-powersave.conf
@@ -329,8 +331,6 @@ install_base_system() {
         echo "options snd_ac97_codec power_save=1" > /etc/modprobe.d/audio-powersave.conf
         ;;
     esac
-
-
 
     # Configuration
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
@@ -359,13 +359,11 @@ install_base_system() {
     bootctl install
     echo "title Arch Linux" >> /boot/loader/entries/arch.conf
     echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
-
     if [ "$vendor" = "GenuineIntel" ]; then
       echo "initrd /intel-ucode.img" >> /boot/loader/entries/arch.conf
     elif [ "$vendor" = "AuthenticAMD" ]; then
       echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
     fi
-
     echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
     echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
 
@@ -384,7 +382,7 @@ install_base_system() {
   ' > /mnt/setup.sh
 
   chmod +x /mnt/setup.sh
-  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2" "$vendor"
+  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2" "$vendor" "$audio_card"
   exit
 }
 
