@@ -306,7 +306,7 @@ install_base_system() {
 
     echo "Boot Loader (Systemd Boot)"
     bootctl install
-    echo "title Arch Linux" >>
+    echo "title Arch Linux" >> /boot/loader/entries/arch.conf
     echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
     echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
     echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
