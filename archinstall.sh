@@ -127,9 +127,12 @@ install_base_system() {
 
   # Create the chroot script
   printf '%s\n' '#!/usr/bin/env bash
-
+  
+  # Get Timezone
+  TIMEZONE="$1"
+    
   configure_system() {
-
+    
     sed -i "s/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/" /etc/locale.gen
     locale-gen
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
@@ -264,10 +267,7 @@ install_base_system() {
     kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-system-settings.conf
 
     # Blacklist configuration
-    echo "# Blacklist the Intel TCO Watchdog/Timer module
-    blacklist iTCO_wdt
-
-    # Blacklist the AMD SP5100 TCO Watchdog/Timer module (Required for Ryzen cpus)
+    echo "blacklist iTCO_wdt
     blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
 
     # Audio power save
@@ -277,7 +277,7 @@ install_base_system() {
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
     sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
-    sed -i "s/^HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
+    sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
     sed -i "s/^OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge debug lto)$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
     mkinitcpio -P
@@ -309,7 +309,7 @@ install_base_system() {
   ' > /mnt/setup.sh
 
   chmod +x /mnt/setup.sh
-  arch-chroot /mnt ./setup.sh
+  arch-chroot /mnt ./setup.sh "$TIMEZONE"
   exit
 }
 
