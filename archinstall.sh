@@ -282,6 +282,16 @@ install_base_system() {
     sed -i "s/^OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge debug lto)$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
     mkinitcpio -P
 
+    # Users
+    echo "Root Password"
+    passwd
+
+    echo "Add User"
+    echo "Enter Username: "
+    read -r username
+    useradd -mG wheel -s /bin/bash "$username"
+    passwd "$username"
+
     # Services
     systemctl enable fstrim.timer NetworkManager
 
@@ -305,14 +315,7 @@ install_base_system() {
 
 # Function to create a new user
 create_user() {
-  echo "Root Password"
-  passwd
 
-  echo "Add User"
-  echo "Enter Username: "
-  read -r username
-  useradd -mG wheel -s /bin/bash "$username"
-  passwd "$username"
 }
 
 main() {
