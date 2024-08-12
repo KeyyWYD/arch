@@ -127,12 +127,12 @@ install_base_system() {
 
   # Create the chroot script
   printf '%s\n' '#!/usr/bin/env bash
-  
+
   # Get Timezone
   TIMEZONE="$1"
-    
+
   configure_system() {
-    
+
     sed -i "s/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/" /etc/locale.gen
     locale-gen
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
@@ -273,14 +273,14 @@ install_base_system() {
     # Audio power save
     echo "options snd_hda_intel power_save=1" > /etc/modprobe.d/audio-powersave.conf
 
-    # Configuration tweaks
+    # Configuration
+    sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /etc/fstab
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
     sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
     sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
     sed -i "s/^OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge debug lto)$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
-    mkinitcpio -P
 
     # Users
     echo "Root Password"
@@ -296,12 +296,16 @@ install_base_system() {
     systemctl enable fstrim.timer NetworkManager
 
     printf '\033c'
+
     echo "Boot Loader (Systemd Boot)"
     bootctl install
     echo "title Arch Linux
     linux /vmlinuz-linux-zen
     initrd /initramfs-linux-zen.img
     options root=PARTUUID=$(blkid -s PARTUUID -o value /dev/$rtpartition) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
+
+    mkinitcpio -P
+    pacman -Syyu
   }
 
   configure_system
