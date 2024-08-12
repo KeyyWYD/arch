@@ -99,7 +99,7 @@ format_and_mount() {
 
   # Create filesystems
   mkfs.fat -F32 "$partition1"
-  mkfs.ext4 -F "$partition2"
+  mkfs.ext4 "$partition2"
 
   # Mount the filesystems
   mount "$partition2" /mnt
@@ -109,25 +109,25 @@ format_and_mount() {
 
 # Install base system
 install_base_system() {
-  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware networkmanager
+  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /mnt/etc/fstab
 
   # Re-mount filesystem
-  umount -A --recursive /mnt
+  umount -l /mnt
   mount "$partition2" /mnt
   mount "$partition1" /mnt/boot
 
   #Create Swapfile if >=8GB
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
   if [[  $TOTAL_MEM -le 8000000 ]]; then
-      # Put swap into the actual system, not into RAM disk, otherwise there is no point in it, it'll cache RAM into RAM. So, /mnt/ everything.
       mkswap -U clear --size 4G --file /mnt/swapfile
       chmod 600 /mnt/swapfile # set permissions.
       chown root /mnt/swapfile
       swapon /mnt/swapfile
       # The line below is written to /mnt/ but doesn't contain /mnt/, since it's just / for the system itself.
+      echo "# /swapfile" >> /mnt/etc/fstab
       echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
   fi
 
@@ -286,9 +286,9 @@ install_base_system() {
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
     sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
-    sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
+    # sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
-    sed -i "s/^OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge debug lto)$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
+    sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
 
     # Users
     echo "Root Password"
@@ -306,12 +306,12 @@ install_base_system() {
 
     echo "Boot Loader (Systemd Boot)"
     bootctl install
-    echo "title Arch Linux
-    linux /vmlinuz-linux-zen
-    initrd /initramfs-linux-zen.img
-    options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
+    echo "title Arch Linux" >>
+    echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
+    echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
+    echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
 
-    mkinitcpio -P
+    #mkinitcpio -P
     pacman -Syyu
 
     echo "
