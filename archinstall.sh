@@ -112,6 +112,7 @@ install_base_system() {
   pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware networkmanager
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
+  sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /mnt/etc/fstab
 
   #Create Swapfile if >=8GB
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
@@ -130,6 +131,9 @@ install_base_system() {
 
   # Get Timezone
   TIMEZONE="$1"
+
+  # Root
+  partition2="$2"
 
   configure_system() {
 
@@ -274,7 +278,6 @@ install_base_system() {
     echo "options snd_hda_intel power_save=1" > /etc/modprobe.d/audio-powersave.conf
 
     # Configuration
-    sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /etc/fstab
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
     sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
@@ -286,7 +289,6 @@ install_base_system() {
     echo "Root Password"
     passwd
 
-    echo "Add User"
     echo "Enter Username: "
     read -r username
     useradd -mG wheel -s /bin/bash "$username"
@@ -302,10 +304,16 @@ install_base_system() {
     echo "title Arch Linux
     linux /vmlinuz-linux-zen
     initrd /initramfs-linux-zen.img
-    options root=PARTUUID=$(blkid -s PARTUUID -o value /dev/$rtpartition) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
+    options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
 
     mkinitcpio -P
     pacman -Syyu
+
+    echo "
+    -------------------------------------------------------------------------
+                    Done - Please Eject Install Media and Reboot
+    -------------------------------------------------------------------------
+    "
   }
 
   configure_system
@@ -313,7 +321,7 @@ install_base_system() {
   ' > /mnt/setup.sh
 
   chmod +x /mnt/setup.sh
-  arch-chroot /mnt ./setup.sh "$TIMEZONE"
+  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2"
   exit
 }
 
@@ -330,7 +338,6 @@ main() {
   timezone
   format_and_mount
   install_base_system
-  echo "Done!"
   exit
 }
 
