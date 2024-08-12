@@ -3,29 +3,56 @@
 # Wifi
 network() {
   while ! ping -c 1 example.com &>/dev/null; do
-    echo "No network connection detected."
+    echo -n "No network connection detected."
 
-    iwctl station list
-    echo "Enter Station: "
-    read -r station
+    while true; do
+      echo -n "Would you like to connect using Wi-Fi? [Y/N]: "
+      read -r choice
 
-    echo "Enter Network Name (SSID): "
-    read -r netssid
+      case "$choice" in
+        [yY] | [yY][eE][sS])
+          while true; do
+            iwctl station list
+            echo -n "Enter station: "
+            read -r station
 
-    echo "Enter Password: "
-    read -r netpwd
+            echo -n "Enter network name (SSID): "
+            read -r netssid
 
-    echo "Attempting to connect to $netssid..."
+            echo -n "Enter password: "
+            read -r netpwd
 
-    # Connect to the Wi-Fi network
-    iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
+            echo -n "Attempting to connect to $netssid..."
 
+            # Connect to the Wi-Fi network
+            # iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
+            if iwctl --passphrase "$netpwd" station "$station" connect "$netssid"; then
+              echo -n "Connected to $netssid."
+              break  # Exit the inner loop if connection is successful
+            else
+              echo -n "Failed to connect to $netssid. Please try again."
+              sleep 5
+              echo -e "\033c"
+            fi
+          done
+          break
+          ;;
+        [nN] | [nN][oO])
+          echo "Rechecking network..."
+          break
+          ;;
+        *)
+          echo -n "Invalid option. Please enter 'Yes' or 'No'."
+          ;;
+      esac
+    done
     # Wait a few seconds before checking the connection again
     sleep 2
   done
 
   echo "Network connection established."
 }
+
 
 timezone() {
   # Get the current timezone
@@ -65,7 +92,7 @@ format_and_mount() {
   umount -A --recursive /mnt
 
   while true; do
-    printf '\033c'
+    echo -e "\033c"
     lsblk
 
     echo "Enter the drive name (e.g., sda / nvme0n1): "
@@ -82,6 +109,9 @@ format_and_mount() {
   done
 
   cfdisk $DISK
+  # I usually create 2 gpt partitions
+  # partition1 boot
+  # partition2 root
 
   echo -ne "
 -------------------------------------------------------------------------
@@ -109,7 +139,17 @@ format_and_mount() {
 
 # Install base system
 install_base_system() {
-  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware networkmanager nano
+  vendor=$(grep 'vendor_id' /proc/cpuinfo | head -n 1 | awk '{print $3}')
+
+  if [ "$vendor" = "GenuineIntel" ]; then
+    ucode="intel-ucode"
+  elif [ "$vendor" = "AuthenticAMD" ]; then
+    ucode="amd-ucode"
+  else
+    ucode=""
+  fi
+
+  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /mnt/etc/fstab
@@ -119,16 +159,15 @@ install_base_system() {
   mount "$partition2" /mnt
   mount "$partition1" /mnt/boot
 
-  #Create Swapfile if >=8GB
+  # Create Swapfile if  MEM<=8GB
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
   if [[  $TOTAL_MEM -le 8000000 ]]; then
-      mkswap -U clear --size 4G --file /mnt/swapfile
-      chmod 600 /mnt/swapfile # set permissions.
-      chown root /mnt/swapfile
-      swapon /mnt/swapfile
-      # The line below is written to /mnt/ but doesn't contain /mnt/, since it's just / for the system itself.
-      echo "# /swapfile" >> /mnt/etc/fstab
-      echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
+    mkswap -U clear --size 4G --file /mnt/swapfile
+    chmod 600 /mnt/swapfile # set permissions.
+    chown root /mnt/swapfile
+    swapon /mnt/swapfile
+    echo "# /swapfile" >> /mnt/etc/fstab
+    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
   fi
 
   # Create the chroot script
@@ -136,9 +175,10 @@ install_base_system() {
 
   # Get Timezone
   TIMEZONE="$1"
-
   # Root
   partition2="$2"
+  # CPU vendor
+  vendor="$3"
 
   configure_system() {
 
@@ -280,12 +320,23 @@ install_base_system() {
     blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
 
     # Audio power save
-    echo "options snd_hda_intel power_save=1" > /etc/modprobe.d/audio-powersave.conf
+    audio_card=$(lspci -k | grep -i -E 'audio|sound' | head -n 1 | awk '{print $5}')
+    case "$audio_card" in
+      *Intel*)
+        echo "options snd_hda_intel power_save=1" > /etc/modprobe.d/audio-powersave.conf
+        ;;
+      *)
+        echo "options snd_ac97_codec power_save=1" > /etc/modprobe.d/audio-powersave.conf
+        ;;
+    esac
+
+
 
     # Configuration
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
     sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
+    # LATER
     # sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
     sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
@@ -302,19 +353,26 @@ install_base_system() {
     # Services
     systemctl enable fstrim.timer NetworkManager
 
-    printf '\033c'
+    echo -e "\033c"
 
     echo "Boot Loader (Systemd Boot)"
     bootctl install
     echo "title Arch Linux" >> /boot/loader/entries/arch.conf
     echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
+
+    if [ "$vendor" = "GenuineIntel" ]; then
+      echo "initrd /intel-ucode.img" >> /boot/loader/entries/arch.conf
+    elif [ "$vendor" = "AuthenticAMD" ]; then
+      echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
+    fi
+
     echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
     echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
 
     #mkinitcpio -P
     pacman -Syyu
 
-    echo "
+    echo -ne "
     -------------------------------------------------------------------------
                     Done - Please Eject Install Media and Reboot
     -------------------------------------------------------------------------
@@ -326,13 +384,13 @@ install_base_system() {
   ' > /mnt/setup.sh
 
   chmod +x /mnt/setup.sh
-  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2"
+  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2" "$vendor"
   exit
 }
 
 main() {
-  printf '\033c'
-  echo -ne"
+  echo -e "\033c"
+  echo -ne "
   -------------------------------------------------------------------------
                       Automated Arch Linux Installer
   -------------------------------------------------------------------------
