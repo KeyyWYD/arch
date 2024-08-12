@@ -313,11 +313,6 @@ install_base_system() {
   exit
 }
 
-# Function to create a new user
-create_user() {
-
-}
-
 main() {
   printf '\033c'
   echo -ne"
@@ -331,7 +326,6 @@ main() {
   timezone
   format_and_mount
   install_base_system
-  create_user
   echo "Done!"
   exit
 }
