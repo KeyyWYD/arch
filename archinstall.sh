@@ -82,11 +82,11 @@ timezone() {
 # Format and mount partitions
 format_and_mount() {
 
-  cat << EOF
+  echo -ne "
 -------------------------------------------------------------------------
                     Formating Disk
 -------------------------------------------------------------------------
-EOF
+"
 
   # Ensure everything is unmounted
   umount -A --recursive /mnt
@@ -107,18 +107,18 @@ EOF
     fi
     sleep 1
   done
-
+n
   cfdisk $DISK
   # I usually create 2 gpt partitions
   # partition1 - boot
   # partition2 - root
   echo -e "\033c"
 
-  cat << EOF
+  echo -ne "
 -------------------------------------------------------------------------
                     Creating Filesystems
 -------------------------------------------------------------------------
-EOF
+"
 
   if [[ "${DISK}" =~ "nvme" ]]; then
     partition1=${DISK}p1
@@ -376,11 +376,11 @@ install_base_system() {
     pacman -Syu
     mkinitcpio -P
 
-    cat << EOF
+    echo -ne "
   -------------------------------------------------------------------------
                   Done - Please Eject Install Media and Reboot
   -------------------------------------------------------------------------
-  EOF
+  "
   }
 
   configure_system
