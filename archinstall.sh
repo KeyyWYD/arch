@@ -3,26 +3,26 @@
 # Wifi
 network() {
   while ! ping -c 1 example.com &>/dev/null; do
-    echo -n "No network connection detected."
+    echo "No network connection detected."
 
     while true; do
-      echo -n "Would you like to connect using Wi-Fi? [Y/N]: "
+      echo "Would you like to connect using Wi-Fi? [Y/N]: "
       read -r choice
 
       case "$choice" in
         [yY] | [yY][eE][sS])
           while true; do
             iwctl station list
-            echo -n "Enter station: "
+            echo "Enter statiecho -e "\033c"on: "
             read -r station
 
-            echo -n "Enter network name (SSID): "
+            echo "Enter network name (SSID): "
             read -r netssid
 
-            echo -n "Enter password: "
+            echo "Enter password: "
             read -r netpwd
 
-            echo -n "Attempting to connect to $netssid..."
+            echo "Attempting to connect to $netssid..."
 
             # Connect to the Wi-Fi network
             # iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
@@ -42,7 +42,7 @@ network() {
           break
           ;;
         *)
-          echo -n "Invalid option. Please enter 'Yes' or 'No'."
+          echo "Invalid option. Please enter [Yes/No]."
           ;;
       esac
     done
@@ -57,9 +57,8 @@ network() {
 timezone() {
   # Get the current timezone
   time_zone=$(curl --fail -s https://ipapi.co/timezone)
-  echo -ne "
-System detected your timezone as '$time_zone' \n"
-  echo -ne "Is this correct? [Yes/No]: "
+  echo "System detected your timezone as '$time_zone'"
+  echo "Is this correct? [Yes/No]: "
   read -r answer
 
   case "$answer" in
@@ -74,7 +73,7 @@ System detected your timezone as '$time_zone' \n"
       echo "Timezone set to '${TIMEZONE}'"
       ;;
     *)
-      echo "Invalid option. Please enter 'Yes' or 'No'."
+      echo "Invalid option. Please enter [Yes/No]."
       timezone
       ;;
   esac
@@ -83,11 +82,12 @@ System detected your timezone as '$time_zone' \n"
 # Format and mount partitions
 format_and_mount() {
 
-  echo -ne "
+  cat << EOF
 -------------------------------------------------------------------------
                     Formating Disk
 -------------------------------------------------------------------------
-"
+EOF
+
   # Ensure everything is unmounted
   umount -A --recursive /mnt
 
@@ -110,14 +110,15 @@ format_and_mount() {
 
   cfdisk $DISK
   # I usually create 2 gpt partitions
-  # partition1 boot
-  # partition2 root
+  # partition1 - boot
+  # partition2 - root
+  echo -e "\033c"
 
-  echo -ne "
+  cat << EOF
 -------------------------------------------------------------------------
                     Creating Filesystems
 -------------------------------------------------------------------------
-"
+EOF
 
   if [[ "${DISK}" =~ "nvme" ]]; then
     partition1=${DISK}p1
@@ -153,12 +154,10 @@ install_base_system() {
   pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
-  sed -i "/\/boot/ s/fmask=0022,dmask=0022/fmask=0137,dmask=0027/" /mnt/etc/fstab
+  sed -i "/\/boot/ s/fmask=0022,dmask=0022/umask=0077/" /mnt/etc/fstab
 
-  # Re-mount filesystem
-  umount -l /mnt
-  mount "$partition2" /mnt
-  mount "$partition1" /mnt/boot
+  # Re-mount boot partition
+  mount -o remount,rw /mnt/boot
 
   # Create Swapfile if  MEM<=8GB
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
@@ -188,6 +187,7 @@ install_base_system() {
     sed -i "s/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/" /etc/locale.gen
     locale-gen
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
+    export LANG=en_US.UTF-8
 
     ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
     hwclock --systohc
@@ -198,125 +198,126 @@ install_base_system() {
 
     # Hosts configuration
     echo "##
-    # Host Database
-    #
-    # localhost is used to configure the loopback interface
-    # when the system is booting.  Do not change this entry.
-    ##
-    127.0.0.1       localhost
-    ::1             localhost
-    127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
+  # Host Database
+  #
+  # localhost is used to configure the loopback interface
+  # when the system is booting.  Do not change this entry.
+  ##
+  127.0.0.1       localhost
+  ::1             localhost ip6-localhost ip6-loopback
+  ff02::1         ip6-allnodes
+  ff02::2         ip6-allrouters
+  127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
 
     # I/O performance
     echo "# HDD
-    ACTION==\"add|change\", KERNEL==\"sd[a-z]*\", ATTR{queue/rotational}==\"1\", ATTR{queue/scheduler}=\"bfq\"
+  ACTION==\"add|change\", KERNEL==\"sd[a-z]*\", ATTR{queue/rotational}==\"1\", ATTR{queue/scheduler}=\"bfq\"
 
-    # SSD
-    ACTION==\"add|change\", KERNEL==\"sd[a-z]*|mmcblk[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"mq-deadline\"
+  # SSD
+  ACTION==\"add|change\", KERNEL==\"sd[a-z]*|mmcblk[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"mq-deadline\"
 
-    # NVMe SSD
-    ACTION==\"add|change\", KERNEL==\"nvme[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"none\"" > /etc/udev/rules.d/60-ioschedulers.rules
-
+  # NVMe SSD
+  ACTION==\"add|change\", KERNEL==\"nvme[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"none\"" > /etc/udev/rules.d/60-ioschedulers.rules
 
     # Adjustments for system performance and behavior
     echo "# The sysctl swappiness parameter determines the kernel'\''s preference for pushing anonymous pages or page cache to disk in memory-starved situations.
-    # A low value causes the kernel to prefer freeing up open files (page cache), a high value causes the kernel to try to use swap space,
-    # and a value of 100 means IO cost is assumed to be equal.
-    vm.swappiness = 100
+  # A low value causes the kernel to prefer freeing up open files (page cache), a high value causes the kernel to try to use swap space,
+  # and a value of 100 means IO cost is assumed to be equal.
+  vm.swappiness = 100
 
-    # The value controls the tendency of the kernel to reclaim the memory which is used for caching of directory and inode objects (VFS cache).
-    # Lowering it from the default value of 100 makes the kernel less inclined to reclaim VFS cache (do not set it to 0, this may produce out-of-memory conditions)
-    #vm.vfs_cache_pressure=50
+  # The value controls the tendency of the kernel to reclaim the memory which is used for caching of directory and inode objects (VFS cache).
+  # Lowering it from the default value of 100 makes the kernel less inclined to reclaim VFS cache (do not set it to 0, this may produce out-of-memory conditions)
+  #vm.vfs_cache_pressure=50
 
-    # Contains, as a bytes of total available memory that contains free pages and reclaimable
-    # pages, the number of pages at which a process which is generating disk writes will itself start
-    # writing out dirty data.
-    vm.dirty_bytes = 268435456
+  # Contains, as a bytes of total available memory that contains free pages and reclaimable
+  # pages, the number of pages at which a process which is generating disk writes will itself start
+  # writing out dirty data.
+  vm.dirty_bytes = 268435456
 
-    # page-cluster controls the number of pages up to which consecutive pages are read in from swap in a single attempt.
-    # This is the swap counterpart to page cache readahead. The mentioned consecutivity is not in terms of virtual/physical addresses,
-    # but consecutive on swap space - that means they were swapped out together. (Default is 3)
-    # increase this value to 1 or 2 if you are using physical swap (1 if ssd, 2 if hdd)
-    vm.page-cluster = 0
+  # page-cluster controls the number of pages up to which consecutive pages are read in from swap in a single attempt.
+  # This is the swap counterpart to page cache readahead. The mentioned consecutivity is not in terms of virtual/physical addresses,
+  # but consecutive on swap space - that means they were swapped out together. (Default is 3)
+  # increase this value to 1 or 2 if you are using physical swap (1 if ssd, 2 if hdd)
+  vm.page-cluster = 0
 
-    # Contains, as a bytes of total available memory that contains free pages and reclaimable
-    # pages, the number of pages at which the background kernel flusher threads will start writing out
-    # dirty data.
-    vm.dirty_background_bytes = 134217728
+  # Contains, as a bytes of total available memory that contains free pages and reclaimable
+  # pages, the number of pages at which the background kernel flusher threads will start writing out
+  # dirty data.
+  vm.dirty_background_bytes = 134217728
 
-    # This tunable is used to define when dirty data is old enough to be eligible for writeout by the
-    # kernel flusher threads.  It is expressed in 100'\''ths of a second.  Data which has been dirty
-    # in-memory for longer than this interval will be written out next time a flusher thread wakes up
-    # (Default is 3000).
-    #vm.dirty_expire_centisecs = 3000
+  # This tunable is used to define when dirty data is old enough to be eligible for writeout by the
+  # kernel flusher threads.  It is expressed in 100'\''ths of a second.  Data which has been dirty
+  # in-memory for longer than this interval will be written out next time a flusher thread wakes up
+  # (Default is 3000).
+  #vm.dirty_expire_centisecs = 3000
 
-    # The kernel flusher threads will periodically wake up and write old data out to disk.  This
-    # tunable expresses the interval between those wakeups, in 100'\''ths of a second (Default is 500).
-    vm.dirty_writeback_centisecs = 1500
+  # The kernel flusher threads will periodically wake up and write old data out to disk.  This
+  # tunable expresses the interval between those wakeups, in 100'\''ths of a second (Default is 500).
+  vm.dirty_writeback_centisecs = 1500
 
-    # This action will speed up your boot and shutdown, because one less module is loaded. Additionally disabling watchdog timers increases performance and lowers power consumption
-    # Disable NMI watchdog
-    kernel.nmi_watchdog = 0
+  # This action will speed up your boot and shutdown, because one less module is loaded. Additionally disabling watchdog timers increases performance and lowers power consumption
+  # Disable NMI watchdog
+  kernel.nmi_watchdog = 0
 
-    # Enable the sysctl setting kernel.unprivileged_userns_clone to allow normal users to run unprivileged containers.
-    kernel.unprivileged_userns_clone = 1
+  # Enable the sysctl setting kernel.unprivileged_userns_clone to allow normal users to run unprivileged containers.
+  kernel.unprivileged_userns_clone = 1
 
-    # To hide any kernel messages from the console
-    kernel.printk = 3 3 3 3
+  # To hide any kernel messages from the console
+  kernel.printk = 3 3 3 3
 
-    # Restricting access to kernel pointers in the proc filesystem
-    kernel.kptr_restrict = 2
+  # Restricting access to kernel pointers in the proc filesystem
+  kernel.kptr_restrict = 2
 
-    # Disable Kexec, which allows replacing the current running kernel.
-    kernel.kexec_load_disabled = 1
+  # Disable Kexec, which allows replacing the current running kernel.
+  kernel.kexec_load_disabled = 1
 
-    # Increase the maximum connections
-    # The upper limit on how many connections the kernel will accept (default 4096 since kernel version 5.6):
-    net.core.somaxconn = 8192
+  # Increase the maximum connections
+  # The upper limit on how many connections the kernel will accept (default 4096 since kernel version 5.6):
+  net.core.somaxconn = 8192
 
-    # Enable TCP Fast Open
-    # TCP Fast Open is an extension to the transmission control protocol (TCP) that helps reduce network latency
-    # by enabling data to be exchanged during the sender'\''s initial TCP SYN [3].
-    # Using the value 3 instead of the default 1 allows TCP Fast Open for both incoming and outgoing connections:
-    net.ipv4.tcp_fastopen = 3
+  # Enable TCP Fast Open
+  # TCP Fast Open is an extension to the transmission control protocol (TCP) that helps reduce network latency
+  # by enabling data to be exchanged during the sender'\''s initial TCP SYN [3].
+  # Using the value 3 instead of the default 1 allows TCP Fast Open for both incoming and outgoing connections:
+  net.ipv4.tcp_fastopen = 3
 
-    # Enable BBR3
-    # The BBR3 congestion control algorithm can help achieve higher bandwidths and lower latencies for internet traffic
-    net.ipv4.tcp_congestion_control = bbr
+  # Enable BBR3
+  # The BBR3 congestion control algorithm can help achieve higher bandwidths and lower latencies for internet traffic
+  net.ipv4.tcp_congestion_control = bbr
 
-    # TCP SYN cookie protection
-    # Helps protect against SYN flood attacks. Only kicks in when net.ipv4.tcp_max_syn_backlog is reached:
-    net.ipv4.tcp_syncookies = 1
+  # TCP SYN cookie protection
+  # Helps protect against SYN flood attacks. Only kicks in when net.ipv4.tcp_max_syn_backlog is reached:
+  net.ipv4.tcp_syncookies = 1
 
-    # TCP Enable ECN Negotiation by default
-    net.ipv4.tcp_ecn = 1
+  # TCP Enable ECN Negotiation by default
+  net.ipv4.tcp_ecn = 1
 
-    # TCP Reduce performance spikes
-    # Refer https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_for_real_time/7/html/tuning_guide/reduce_tcp_performance_spikes
-    net.ipv4.tcp_timestamps = 0
+  # TCP Reduce performance spikes
+  # Refer https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_for_real_time/7/html/tuning_guide/reduce_tcp_performance_spikes
+  net.ipv4.tcp_timestamps = 0
 
-    # Increase netdev receive queue
-    # May help prevent losing packets
-    net.core.netdev_max_backlog = 16384
+  # Increase netdev receive queue
+  # May help prevent losing packets
+  net.core.netdev_max_backlog = 16384
 
-    # Disable TCP slow start after idle
-    # Helps kill persistent single connection performance
-    net.ipv4.tcp_slow_start_after_idle = 0
+  # Disable TCP slow start after idle
+  # Helps kill persistent single connection performance
+  net.ipv4.tcp_slow_start_after_idle = 0
 
-    # Protect against tcp time-wait assassination hazards, drop RST packets for sockets in the time-wait state. Not widely supported outside of Linux, but conforms to RFC:
-    net.ipv4.tcp_rfc1337 = 1
+  # Protect against tcp time-wait assassination hazards, drop RST packets for sockets in the time-wait state. Not widely supported outside of Linux, but conforms to RFC:
+  net.ipv4.tcp_rfc1337 = 1
 
-    # Set the maximum watches on files
-    fs.inotify.max_user_watches = 524288
+  # Set the maximum watches on files
+  fs.inotify.max_user_watches = 524288
 
-    # Set size of file handles and inode cache
-    fs.file-max = 2097152
+  # Set size of file handles and inode cache
+  fs.file-max = 2097152
 
-    # Increase writeback interval for xfs
-    fs.xfs.xfssyncd_centisecs = 10000
+  # Increase writeback interval for xfs
+  fs.xfs.xfssyncd_centisecs = 10000
 
-    # Disable core dumps
-    kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-system-settings.conf
+  # Disable core dumps
+  kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-system-settings.conf
 
     # Blacklist configuration
     echo "blacklist iTCO_wdt
@@ -335,11 +336,16 @@ install_base_system() {
     # Configuration
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
-    sed -i "s/^#%wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
-    # LATER
-    # sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
+    sed -i "s/^# %wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
+    # Test
+    sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf block keyboard keymap sd-vconsole filesystems)/" /etc/mkinitcpio.conf
+    #
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
-    sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto)/" /etc/makepkg.conf
+    sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto !autodeps)/" /etc/makepkg.conf
+
+
+    echo -e "\033c"
+    echo "Applied System Configurations"
 
     # Users
     echo "Root Password"
@@ -365,16 +371,16 @@ install_base_system() {
       echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
     fi
     echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
-    echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw loglevel=3 quiet fbcon=nodefer nowatchdog" >> /boot/loader/entries/arch.conf
+    echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw nowatchdog loglevel=3 quiet fbcon=nodefer" >> /boot/loader/entries/arch.conf
 
-    #mkinitcpio -P
-    pacman -Syyu
+    pacman -Syu
+    mkinitcpio -P
 
-    echo -ne "
-    -------------------------------------------------------------------------
-                    Done - Please Eject Install Media and Reboot
-    -------------------------------------------------------------------------
-    "
+    cat << EOF
+  -------------------------------------------------------------------------
+                  Done - Please Eject Install Media and Reboot
+  -------------------------------------------------------------------------
+  EOF
   }
 
   configure_system
@@ -388,11 +394,11 @@ install_base_system() {
 
 main() {
   echo -e "\033c"
-  echo -ne "
-  -------------------------------------------------------------------------
-                      Automated Arch Linux Installer
-  -------------------------------------------------------------------------
-  "
+  cat << EOF
+-------------------------------------------------------------------------
+                    Automated Arch Linux Installer
+-------------------------------------------------------------------------
+EOF
 
   timedatectl set-ntp true
   network
