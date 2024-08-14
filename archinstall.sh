@@ -93,8 +93,7 @@ format_and_mount() {
 
   while true; do
     lsblk
-
-    echo "Enter the drive name (e.g., sda / nvme0n1): "
+    echo -e "\nEnter the drive name (e.g., vda / sda / nvme0n1): "
     read -r drive
     DISK="/dev/$drive"
 
@@ -141,7 +140,7 @@ format_and_mount() {
 
 # Install base system
 install_base_system() {
-  vendor=$(grep 'vendor_id' /proc/cpuinfo | head -n 1 | awk '{print $3}')
+  vendor=$(lscpu | grep 'Vendor ID:' | awk '{print $3}')
   audio_card=$(lspci -k | grep -i -E 'audio|sound' | head -n 1 | awk '{print $5}')
   gpu=$(lspci | grep -i 'vga\|3d\|display')
 
@@ -302,11 +301,10 @@ fs.file-max = 2097152
 fs.xfs.xfssyncd_centisecs = 10000
 
 # Disable core dumps
-kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-system-settings.conf
+kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-arch-settings.conf
 
   # Blacklist configuration
-  echo "blacklist iTCO_wdt
-blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
+  echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
 
   # Audio power save
   case "$audio_card" in
@@ -320,18 +318,22 @@ blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
 
   # Make adjustments in pacman.conf:
   # - add ILoveCandy
-  # - enable Color, VerbosePkgLists and ParallelDownloads
+  # - enable Color and ParallelDownloads
   # - enable multilib
   sed -i \
       -e "/^#Color/a ILoveCandy" \
       -e "s|^#Color|Color|" \
       -e "s|^#ParallelDownloads = 5|ParallelDownloads = 3|" \
-      -e "/^# \[multilib\]/s/^# //" \
-      -e "/\[multilib\]/,/^\[/ s/^# \?Include/Include/" \
-      /etc/pacman.conf
+      -e "s|^#\(\[multilib\]\)|\1|" \
+      -e "/\[multilib\]/,/^\[/ s/^# \?Include/Include/" /etc/pacman.conf
+
 
   # Add sudo rights
-  sed -i "s/^# %wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
+  sed -i "/^# Defaults\!PKGMAN \!intercept, \!log_subcmds/a ##tmp" /etc/sudoers
+  sed -i "/^##tmp/a Defaults rootpw" /etc/sudoers
+  sed -i "/^Defaults rootpw/a Defaults insults" /etc/sudoers
+  sed -i "s|^##tmp|##|" /etc/sudoers
+  sed -i "s|^# %wheel ALL=(ALL:ALL) ALL|%wheel ALL=(ALL:ALL) ALL|" /etc/sudoers
 
   # Hide fsck messages during boot
   sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
@@ -347,21 +349,21 @@ blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
   # Makepkg Options
   sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto !autodeps)/" /etc/makepkg.conf
 
-  # Graphics Drivers find and install (broken)
+  # Graphics Drivers find and install
   gpu_info=$gpu
-  # # Check for Intel Graphics
-  if echo "$gpu_info" | grep -Ei "Integrated Graphics Controller|UHD Graphics" >/dev/null; then
-    pacman -S --needed --noconfirm mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo
+  # Check for Intel Graphics
+  if [[ "$gpu_info" == *"Integrated Graphics Controller"* || "$gpu_info" == *"UHD Graphics"* ]]; then
+    pacman -S --noconfirm mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo
     # Hardware video acceleration
     echo "LIBVA_DRIVER_NAME=iHD" >> /etc/environment
     echo "VDPAU_DRIVER=va_gl" >> /etc/environment
   fi
   # untested!
   # Check for NVIDIA
-  # elif echo "$gpu_info" | grep -Eiq "NVIDIA|GeForce"; then
+  # elif [[ "$gpu_info" == *"NVIDIA"* || "$gpu_info" == *"GeForce"* ]]; then
   #   pacman -S --noconfirm --needed nvidia
   # Check for AMD
-  # elif echo "$gpu_info" | grep -Ei "Radeon|AMD" >/dev/null; then
+  # elif [[ "$gpu_info" == *"Radeon"* || "$gpu_info" == *"AMD"* ]]; then
   #   pacman -S --noconfirm --needed xf86-video-amdgpu
   # fi
 
@@ -373,7 +375,7 @@ blacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
   echo "$hostname" > /etc/hostname
 
   # Hosts configuration
-  echo "##
+  echo -e "##
 # Host Database
 #
 # localhost is used to configure the loopback interface
