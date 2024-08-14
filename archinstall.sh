@@ -3,7 +3,7 @@
 # Wifi
 network() {
   while ! ping -c 1 example.com &>/dev/null; do
-    echo "No network connection detected."
+    echo -e "No network connection detected.\n"
 
     while true; do
       echo "Would you like to connect using Wi-Fi? [Y/N]: "
@@ -16,21 +16,21 @@ network() {
             echo "Please enter station name: "
             read -r station
 
-            echo "Please enter network name (SSID): "
+            echo -e "\nPlease enter network name (SSID): "
             read -r netssid
 
-            echo "Enter password: "
+            echo -e "\nEnter password: "
             read -r netpwd
 
-            echo "Attempting to connect to $netssid..."
+            echo -e "\nAttempting to connect to $netssid..."
 
             # Connect to the Wi-Fi network
             # iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
             if iwctl --passphrase "$netpwd" station "$station" connect "$netssid"; then
-              echo -n "Connected to $netssid."
+              echo -e "\nConnected to $netssid."
               break  # Exit the inner loop if connection is successful
             else
-              echo -n "Failed to connect to $netssid. Please try again."
+              echo -e "\nFailed to connect to $netssid. Please try again."
               sleep 5
               echo -e "\033c"
             fi
@@ -38,11 +38,11 @@ network() {
           break
           ;;
         [nN] | [nN][oO])
-          echo "Rechecking network..."
+          echo -e "\nRechecking network..."
           break
           ;;
         *)
-          echo "Invalid option. Please enter [Yes/No]."
+          echo -e "\nInvalid option. Please enter [Yes/No]."
           ;;
       esac
     done
@@ -50,7 +50,7 @@ network() {
     sleep 2
   done
 
-  echo "Network connection established.\n"
+  echo -e "Network connection established.\n"
 }
 
 
@@ -81,7 +81,7 @@ timezone() {
 
 # Format and mount partitions
 format_and_mount() {
-
+  echo -e "\033c"
   echo -ne "
 -------------------------------------------------------------------------
                     Formating Disk
@@ -92,7 +92,6 @@ format_and_mount() {
   umount -A --recursive /mnt
 
   while true; do
-    echo -e "\033c"
     lsblk
 
     echo "Enter the drive name (e.g., sda / nvme0n1): "
@@ -104,10 +103,11 @@ format_and_mount() {
       break
     else
       echo "Error: Disk $DISK does not exist. Please enter a valid disk."
+      echo -e "\033c"
     fi
     sleep 1
   done
-n
+
   cfdisk $DISK
   # I usually create 2 gpt partitions
   # partition1 - boot
@@ -119,6 +119,7 @@ n
                     Creating Filesystems
 -------------------------------------------------------------------------
 "
+  sleep 2
 
   if [[ "${DISK}" =~ "nvme" ]]; then
     partition1=${DISK}p1
@@ -182,6 +183,7 @@ install_base_system() {
 
   configure_system() {
 
+    # Localization
     sed -i "s/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/" /etc/locale.gen
     locale-gen
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
@@ -358,7 +360,7 @@ install_base_system() {
     # fi
 
     echo -e "\033c"
-    echo "Applied System Configurations"
+    echo -e "Applied System Configurations\n"
 
     echo "Please enter hostname: "
     read -r hostname
@@ -378,10 +380,10 @@ install_base_system() {
   127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
 
     # Users
-    echo -n "Root Password"
+    echo -e "\nRoot Password"
     passwd
 
-    echo "Please enter username: "
+    echo -e "\nPlease enter username: "
     read -r username
     useradd -mG wheel -s /bin/bash "$username"
     passwd "$username"
