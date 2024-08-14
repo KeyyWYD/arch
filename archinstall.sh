@@ -13,10 +13,10 @@ network() {
         [yY] | [yY][eE][sS])
           while true; do
             iwctl station list
-            echo "Enter statiecho -e "\033c"on: "
+            echo "Please enter station name: "
             read -r station
 
-            echo "Enter network name (SSID): "
+            echo "Please enter network name (SSID): "
             read -r netssid
 
             echo "Enter password: "
@@ -50,7 +50,7 @@ network() {
     sleep 2
   done
 
-  echo "Network connection established."
+  echo "Network connection established.\n"
 }
 
 
@@ -163,8 +163,6 @@ install_base_system() {
   TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
   if [[  $TOTAL_MEM -le 8000000 ]]; then
     mkswap -U clear --size 4G --file /mnt/swapfile
-    chmod 600 /mnt/swapfile # set permissions.
-    chown root /mnt/swapfile
     swapon /mnt/swapfile
     echo "# /swapfile" >> /mnt/etc/fstab
     echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
@@ -191,23 +189,6 @@ install_base_system() {
 
     ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
     hwclock --systohc
-
-    echo "Hostname: "
-    read -r hostname
-    echo "$hostname" > /etc/hostname
-
-    # Hosts configuration
-    echo "##
-  # Host Database
-  #
-  # localhost is used to configure the loopback interface
-  # when the system is booting.  Do not change this entry.
-  ##
-  127.0.0.1       localhost
-  ::1             localhost ip6-localhost ip6-loopback
-  ff02::1         ip6-allnodes
-  ff02::2         ip6-allrouters
-  127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
 
     # I/O performance
     echo "# HDD
@@ -333,25 +314,74 @@ install_base_system() {
         ;;
     esac
 
-    # Configuration
+    # System Configuration
+
+    # Add parallel downloading
     sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 3/" /etc/pacman.conf
+
+    # Enable multilib
     sed -i "/\[multilib\]/,/Include/ s/^#//" /etc/pacman.conf
+
+    # Add sudo rights
     sed -i "s/^# %wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/" /etc/sudoers
-    # Test
-    sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf block keyboard keymap sd-vconsole filesystems)/" /etc/mkinitcpio.conf
-    #
+
+    # Hide fsck messages during boot
+    sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
+
+    # Fix vconsole error
+    if [ ! -f /etc/vconsole.conf ]; then
+      echo -e "## This is the fallback vconsole configuration provided by systemd.\n\n#KEYMAP=us" > /etc/vconsole.conf
+    fi
+
+    # Fix watchdog error messages
     sed -i "s/^#RebootWatchdogSec=10min$/RebootWatchdogSec=0/" /etc/systemd/system.conf
+
+    # Makepkg Options
     sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto !autodeps)/" /etc/makepkg.conf
 
+    # Graphics Drivers find and install
+    gpu_info=$(lspci | grep -i 'vga\|3d\|display')
+    # Check for Intel Graphics
+    if echo "$gpu_info" | grep -Ei "Integrated Graphics Controller|UHD Graphics" >/dev/null; then
+      pacman -S --needed --noconfirm mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo
+      # Hardware video acceleration
+      echo "LIBVA_DRIVER_NAME=iHD" >> /etc/environment
+      echo "VDPAU_DRIVER=va_gl" >> /etc/environment
+    fi
+    # untested!
+    # Check for NVIDIA
+    # elif echo "$gpu_info" | grep -Eiq "NVIDIA|GeForce"; then
+    #   pacman -S --noconfirm --needed nvidia
+    # Check for AMD
+    # elif echo "$gpu_info" | grep -Ei "Radeon|AMD" >/dev/null; then
+    #   pacman -S --noconfirm --needed xf86-video-amdgpu
+    # fi
 
     echo -e "\033c"
     echo "Applied System Configurations"
 
+    echo "Please enter hostname: "
+    read -r hostname
+    echo "$hostname" > /etc/hostname
+
+    # Hosts configuration
+    echo "##
+  # Host Database
+  #
+  # localhost is used to configure the loopback interface
+  # when the system is booting.  Do not change this entry.
+  ##
+  127.0.0.1       localhost
+  ::1             localhost ip6-localhost ip6-loopback
+  ff02::1         ip6-allnodes
+  ff02::2         ip6-allrouters
+  127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
+
     # Users
-    echo "Root Password"
+    echo -n "Root Password"
     passwd
 
-    echo "Enter Username: "
+    echo "Please enter username: "
     read -r username
     useradd -mG wheel -s /bin/bash "$username"
     passwd "$username"
@@ -371,10 +401,10 @@ install_base_system() {
       echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
     fi
     echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
-    echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw nowatchdog loglevel=3 quiet fbcon=nodefer" >> /boot/loader/entries/arch.conf
+    echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw nowatchdog loglevel=3 quiet" >> /boot/loader/entries/arch.conf
 
-    pacman -Syu
     mkinitcpio -P
+    pacman -Syu --noconfirm
 
     echo -ne "
   -------------------------------------------------------------------------
@@ -398,6 +428,7 @@ main() {
 -------------------------------------------------------------------------
                     Automated Arch Linux Installer
 -------------------------------------------------------------------------
+
 EOF
 
   timedatectl set-ntp true
