@@ -184,12 +184,12 @@ install_base_system() {
   configure_system() {
 
     # Localization
-    sed -i "s/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/" /etc/locale.gen
+    sed -i "s/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
     locale-gen
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
     export LANG=en_US.UTF-8
 
-    ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
+    ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
     hwclock --systohc
 
     # I/O performance
@@ -330,7 +330,7 @@ install_base_system() {
     # Hide fsck messages during boot
     sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
 
-    # Fix vconsole error
+    # Fix vconsole error messages
     if [ ! -f /etc/vconsole.conf ]; then
       echo -e "## This is the fallback vconsole configuration provided by systemd.\n\n#KEYMAP=us" > /etc/vconsole.conf
     fi
