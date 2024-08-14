@@ -181,6 +181,8 @@ partition2="$2"
 vendor="$3"
 # Audio
 audio_card="$4"
+# GPU
+gpu="$5"
 
 configure_system() {
   # Localization
