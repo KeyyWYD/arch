@@ -152,7 +152,7 @@ install_base_system() {
     ucode=""
   fi
 
-  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode networkmanager nano
+  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode zram-generator networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/umask=0077/" /mnt/etc/fstab
@@ -160,14 +160,23 @@ install_base_system() {
   # Re-mount boot partition
   mount -o remount,rw /mnt/boot
 
-  # Create Swapfile if  MEM<=8GB
-  TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
-  if [[  $TOTAL_MEM -le 8000000 ]]; then
-    mkswap -U clear --size 4G --file /mnt/swapfile
-    swapon /mnt/swapfile
-    echo "# /swapfile" >> /mnt/etc/fstab
-    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
-  fi
+  # [SWAP] ######################
+  # Zram
+  echo "[zram0]
+compression-algorithm = zstd
+zram-size = ram / 2
+swap-priority = 100
+fs-type = swap" > /mnt/usr/lib/systemd/zram-generator.conf
+
+  # Swapfile
+  # TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+  # if [[  $TOTAL_MEM -le 8000000 ]]; then
+  #   mkswap -U clear --size 4G --file /mnt/swapfile
+  #   swapon /mnt/swapfile
+  #   echo "# /swapfile" >> /mnt/etc/fstab
+  #   echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
+  # fi
+  ###############################
 
   # Create the chroot script
   printf '%s\n' '#!/usr/bin/env bash
@@ -188,7 +197,6 @@ configure_system() {
   sed -i "s/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
   locale-gen
   echo "LANG=en_US.UTF-8" > /etc/locale.conf
-  export LANG=en_US.UTF-8
 
   ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
   hwclock --systohc
@@ -301,7 +309,7 @@ fs.file-max = 2097152
 fs.xfs.xfssyncd_centisecs = 10000
 
 # Disable core dumps
-kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-arch-settings.conf
+kernel.core_pattern = /dev/null" > /usr/lib/sysctl.d/99-arch-settings.conf
 
   # Blacklist configuration
   echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
@@ -323,6 +331,7 @@ kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-arch-settings.conf
   sed -i \
       -e "/^#Color/a ILoveCandy" \
       -e "s|^#Color|Color|" \
+      -e "/^#VerbosePkgLists/a DisableDownloadTimeout" \
       -e "s|^#ParallelDownloads = 5|ParallelDownloads = 3|" \
       -e "s|^#\(\[multilib\]\)|\1|" \
       -e "/\[multilib\]/,/^\[/ s/^# \?Include/Include/" /etc/pacman.conf
@@ -331,7 +340,8 @@ kernel.core_pattern = /dev/null" > /etc/sysctl.d/99-arch-settings.conf
   # Add sudo rights
   sed -i "/^# Defaults\!PKGMAN \!intercept, \!log_subcmds/a ##tmp" /etc/sudoers
   sed -i "/^##tmp/a Defaults rootpw" /etc/sudoers
-  sed -i "/^Defaults rootpw/a Defaults insults" /etc/sudoers
+  sed -i "/^Defaults rootpw/a Defaults pwfeedback" /etc/sudoers
+  sed -i "/^Defaults pwfeedback/a Defaults insults" /etc/sudoers
   sed -i "s|^##tmp|##|" /etc/sudoers
   sed -i "s|^# %wheel ALL=(ALL:ALL) ALL|%wheel ALL=(ALL:ALL) ALL|" /etc/sudoers
 
@@ -397,7 +407,15 @@ ff02::2         ip6-allrouters
   passwd "$username"
 
   # Services
+  # TRIM for SSD
   systemctl enable fstrim.timer NetworkManager
+  # zram
+  systemctl daemon-reload
+  systemctl start /dev/zram0
+  swapon
+  # automatic pacman cache deletion
+  systemctl enable --now paccache.timer
+  sleep 5
 
   echo -e "\033c"
 
@@ -411,7 +429,7 @@ ff02::2         ip6-allrouters
     echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
   fi
   echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
-  echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw nowatchdog loglevel=3 quiet" >> /boot/loader/entries/arch.conf
+  echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw zswap.enabled=0 nowatchdog loglevel=3 quiet" >> /boot/loader/entries/arch.conf
 
   mkinitcpio -P
   pacman -Syu --noconfirm
