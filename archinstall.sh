@@ -144,6 +144,7 @@ install_base_system() {
   audio_card=$(lspci -k | grep -i -E 'audio|sound' | head -n 1 | awk '{print $5}')
   gpu=$(lspci | grep -i 'vga\|3d\|display')
 
+  # Microcode
   if [ "$vendor" = "GenuineIntel" ]; then
     ucode="intel-ucode"
   elif [ "$vendor" = "AuthenticAMD" ]; then
@@ -152,12 +153,31 @@ install_base_system() {
     ucode=""
   fi
 
-  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode zram-generator networkmanager nano
+  # Graphics Drivers find and install
+  # Check for Intel
+  if [[ "$gpu" == *"Integrated Graphics Controller"* || "$gpu" == *"UHD Graphics"* ]]; then
+    drv="mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo"
+    # Hardware video acceleration
+    echo "LIBVA_DRIVER_NAME=iHD" >> /mnt/etc/environment
+    echo "VDPAU_DRIVER=va_gl" >> /mnt/etc/environment
+
+  # untested!
+  # Check for NVIDIA
+  # elif [[ "$gpu" == *"NVIDIA"* || "$gpu" == *"GeForce"* ]]; then
+  #   drv="nvidia"
+  # Check for AMD
+  # elif [[ "$gpu" == *"Radeon"* || "$gpu" == *"AMD"* ]]; then
+  #   drv="xf86-video-amdgpu"
+  else
+    drv=""
+  fi
+
+  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode $drv zram-generator networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/umask=0077/" /mnt/etc/fstab
 
-  # Re-mount boot partition
+  # Re-mount boot partition (Attempt)
   mount -o remount,rw /mnt/boot
 
   # [SWAP] ######################
@@ -189,8 +209,6 @@ partition2="$2"
 vendor="$3"
 # Audio
 audio_card="$4"
-# GPU
-gpu="$5"
 
 configure_system() {
   # Localization
@@ -336,7 +354,6 @@ kernel.core_pattern = /dev/null" > /usr/lib/sysctl.d/99-arch-settings.conf
       -e "s|^#\(\[multilib\]\)|\1|" \
       -e "/\[multilib\]/,/^\[/ s/^# \?Include/Include/" /etc/pacman.conf
 
-
   # Add sudo rights
   sed -i "/^# Defaults\!PKGMAN \!intercept, \!log_subcmds/a ##tmp" /etc/sudoers
   sed -i "/^##tmp/a Defaults rootpw" /etc/sudoers
@@ -359,24 +376,6 @@ kernel.core_pattern = /dev/null" > /usr/lib/sysctl.d/99-arch-settings.conf
   # Makepkg Options
   sed -i "s/^OPTIONS=.*$/OPTIONS=(strip docs !libtool !staticlibs emptydirs zipman purge !debug lto !autodeps)/" /etc/makepkg.conf
 
-  # Graphics Drivers find and install
-  gpu_info=$gpu
-  # Check for Intel Graphics
-  if [[ "$gpu_info" == *"Integrated Graphics Controller"* || "$gpu_info" == *"UHD Graphics"* ]]; then
-    pacman -S --noconfirm mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo
-    # Hardware video acceleration
-    echo "LIBVA_DRIVER_NAME=iHD" >> /etc/environment
-    echo "VDPAU_DRIVER=va_gl" >> /etc/environment
-  fi
-  # untested!
-  # Check for NVIDIA
-  # elif [[ "$gpu_info" == *"NVIDIA"* || "$gpu_info" == *"GeForce"* ]]; then
-  #   pacman -S --noconfirm --needed nvidia
-  # Check for AMD
-  # elif [[ "$gpu_info" == *"Radeon"* || "$gpu_info" == *"AMD"* ]]; then
-  #   pacman -S --noconfirm --needed xf86-video-amdgpu
-  # fi
-
   echo -e "\033c"
   echo -e "Applied System Configurations\n"
 
@@ -397,7 +396,7 @@ ff02::1         ip6-allnodes
 ff02::2         ip6-allrouters
 127.0.1.1       $hostname.localdomain $hostname" > /etc/hosts
 
-  # Users
+  # Users22B2-45B4
   echo -e "\nRoot Password"
   passwd
 
@@ -413,8 +412,6 @@ ff02::2         ip6-allrouters
   systemctl daemon-reload
   systemctl start /dev/zram0
   swapon
-  # automatic pacman cache deletion
-  systemctl enable --now paccache.timer
   sleep 5
 
   echo -e "\033c"
@@ -443,7 +440,7 @@ ff02::2         ip6-allrouters
 configure_system' > /mnt/setup.sh
 
   chmod +x /mnt/setup.sh
-  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2" "$vendor" "$audio_card" "$gpu"
+  arch-chroot /mnt ./setup.sh "$TIMEZONE" "$partition2" "$vendor" "$audio_card"
   exit
 }
 
