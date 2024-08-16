@@ -156,11 +156,7 @@ install_base_system() {
   # Graphics Drivers find and install
   # Check for Intel
   if [[ "$gpu" == *"Integrated Graphics Controller"* || "$gpu" == *"UHD Graphics"* ]]; then
-    drv="mesa lib32-mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo"
-    # Hardware video acceleration
-    echo "LIBVA_DRIVER_NAME=iHD" >> /mnt/etc/environment
-    echo "VDPAU_DRIVER=va_gl" >> /mnt/etc/environment
-
+    drv="mesa vulkan-intel intel-media-driver libvdpau-va-gl libva-utils vdpauinfo"
   # untested!
   # Check for NVIDIA
   # elif [[ "$gpu" == *"NVIDIA"* || "$gpu" == *"GeForce"* ]]; then
@@ -180,6 +176,12 @@ install_base_system() {
   # Re-mount boot partition (Attempt)
   mount -o remount,rw /mnt/boot
 
+  # Hardware video acceleration
+  if [[ "$gpu" == *"Integrated Graphics Controller"* || "$gpu" == *"UHD Graphics"* ]]; then
+    echo "LIBVA_DRIVER_NAME=iHD" >> /mnt/etc/environment
+    echo "VDPAU_DRIVER=va_gl" >> /mnt/etc/environment
+  fi
+  
   # [SWAP] ######################
   # Zram
   echo "[zram0]
