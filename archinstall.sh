@@ -200,27 +200,6 @@ fs-type = swap" > /mnt/usr/lib/systemd/zram-generator.conf
   # fi
   ###############################
 
-  # Create the chroot script
-  printf '%s\n' '#!/usr/bin/env bash
-
-# Get Timezone
-TIMEZONE="$1"
-# Root
-partition2="$2"
-# CPU vendor
-vendor="$3"
-# Audio
-audio_card="$4"
-
-configure_system() {
-  # Localization
-  sed -i "s/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
-  locale-gen
-  echo "LANG=en_US.UTF-8" > /etc/locale.conf
-
-  ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
-  hwclock --systohc
-
   # I/O performance
   echo "# HDD
 ACTION==\"add|change\", KERNEL==\"sd[a-z]*\", ATTR{queue/rotational}==\"1\", ATTR{queue/scheduler}=\"bfq\"
@@ -229,7 +208,8 @@ ACTION==\"add|change\", KERNEL==\"sd[a-z]*\", ATTR{queue/rotational}==\"1\", ATT
 ACTION==\"add|change\", KERNEL==\"sd[a-z]*|mmcblk[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"mq-deadline\"
 
 # NVMe SSD
-ACTION==\"add|change\", KERNEL==\"nvme[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"none\"" > /etc/udev/rules.d/60-ioschedulers.rules
+ACTION==\"add|change\", KERNEL==\"nvme[0-9]*\", ATTR{queue/rotational}==\"0\", ATTR{queue/scheduler}=\"none\"
+" > /mnt/etc/udev/rules.d/60-ioschedulers.rules
 
   # Adjustments for system performance and behavior
   echo "# The sysctl swappiness parameter determines the kernel'\''s preference for pushing anonymous pages or page cache to disk in memory-starved situations.
@@ -329,10 +309,32 @@ fs.file-max = 2097152
 fs.xfs.xfssyncd_centisecs = 10000
 
 # Disable core dumps
-kernel.core_pattern = /dev/null" > /usr/lib/sysctl.d/99-arch-settings.conf
+kernel.core_pattern = /dev/null
+" > /mnt/usr/lib/sysctl.d/99-arch-settings.conf
 
   # Blacklist configuration
-  echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /etc/modprobe.d/blacklist.conf
+  echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /mnt/etc/modprobe.d/blacklist.conf
+  
+  # Create the chroot script
+  printf '%s\n' '#!/usr/bin/env bash
+
+# Get Timezone
+TIMEZONE="$1"
+# Root
+partition2="$2"
+# CPU vendor
+vendor="$3"
+# Audio
+audio_card="$4"
+
+configure_system() {
+  # Localization
+  sed -i "s/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
+  locale-gen
+  echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
+  ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+  hwclock --systohc
 
   # Audio power save
   case "$audio_card" in
