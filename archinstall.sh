@@ -168,7 +168,7 @@ install_base_system() {
     drv=""
   fi
 
-  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode $drv zram-generator networkmanager nano
+  pacstrap /mnt base base-devel linux-zen linux-zen-headers linux-firmware $ucode $drv zram-generator plymouth networkmanager nano
 
   genfstab -U -p /mnt >> /mnt/etc/fstab
   sed -i "/\/boot/ s/fmask=0022,dmask=0022/umask=0077/" /mnt/etc/fstab
@@ -184,22 +184,23 @@ install_base_system() {
   
   # [SWAP] ######################
   # Zram
-  echo "[zram0]
-compression-algorithm = zstd
-zram-size = ram / 2
-swap-priority = 100
-fs-type = swap" > /mnt/usr/lib/systemd/zram-generator.conf
+  echo -e "[zram0]\ncompression-algorithm = zstd\nzram-size = ram / 2\nswap-priority = 100\nfs-type = swap" > /mnt/usr/lib/systemd/zram-generator.conf
 
   # Swapfile
   # TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
   # if [[  $TOTAL_MEM -le 8000000 ]]; then
   #   mkswap -U clear --size 4G --file /mnt/swapfile
   #   swapon /mnt/swapfile
-  #   echo "# /swapfile" >> /mnt/etc/fstab
-  #   echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
+  #   echo -e "# /swapfile\n/swapfile none swap defaults 0 0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
   # fi
   ###############################
 
+  # Plymouth config (Vendor logo)
+  echo -e "[Daemon]\nTheme=bgrt\nShowDelay=5" > /etc/plymouth/plymouthd.conf
+
+  # Blacklist configuration
+  echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /mnt/etc/modprobe.d/blacklist.conf
+  
   # I/O performance
   echo "# HDD
 ACTION==\"add|change\", KERNEL==\"sd[a-z]*\", ATTR{queue/rotational}==\"1\", ATTR{queue/scheduler}=\"bfq\"
@@ -311,9 +312,6 @@ fs.xfs.xfssyncd_centisecs = 10000
 # Disable core dumps
 kernel.core_pattern = /dev/null
 " > /mnt/usr/lib/sysctl.d/99-arch-settings.conf
-
-  # Blacklist configuration
-  echo -e "blacklist iTCO_wdt\n\nblacklist sp5100_tco" > /mnt/etc/modprobe.d/blacklist.conf
   
   # Create the chroot script
   printf '%s\n' '#!/usr/bin/env bash
@@ -367,7 +365,7 @@ configure_system() {
   sed -i "s|^# %wheel ALL=(ALL:ALL) ALL|%wheel ALL=(ALL:ALL) ALL|" /etc/sudoers
 
   # Hide fsck messages during boot
-  sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf keyboard keymap sd-vconsole block filesystems)/" /etc/mkinitcpio.conf
+  sed -i "s/^HOOKS=.*$/HOOKS=(base systemd autodetect microcode kms modconf keyboard keymap sd-vconsole block filesystems plymouth)/" /etc/mkinitcpio.conf
 
   # Fix vconsole error messages
   if [ ! -f /etc/vconsole.conf ]; then
@@ -409,7 +407,13 @@ ff02::2         ip6-allrouters
   useradd -mG wheel -s /bin/bash "$username"
   passwd "$username"
 
-  # Services
+  echo -e "\033c"
+
+  echo -ne "
+-------------------------------------------------------------------------
+                    Starting Services
+-------------------------------------------------------------------------
+"
   # TRIM for SSD
   systemctl enable fstrim.timer NetworkManager
   # zram
@@ -420,8 +424,13 @@ ff02::2         ip6-allrouters
 
   echo -e "\033c"
 
-  echo "Boot Loader (Systemd Boot)"
+  echo -ne "
+-------------------------------------------------------------------------
+                    Installing Bootloader
+-------------------------------------------------------------------------
+"
   bootctl install
+  echo "default @saved\ntimeout 5\nconsole-mode auto" > /boot/loader/loader.conf
   echo "title Arch Linux" >> /boot/loader/entries/arch.conf
   echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
   if [ "$vendor" = "GenuineIntel" ]; then
@@ -430,7 +439,7 @@ ff02::2         ip6-allrouters
     echo "initrd /amd-ucode.img" >> /boot/loader/entries/arch.conf
   fi
   echo "initrd /initramfs-linux-zen.img" >> /boot/loader/entries/arch.conf
-  echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw zswap.enabled=0 nowatchdog loglevel=3 quiet" >> /boot/loader/entries/arch.conf
+  echo "options root=PARTUUID=$(blkid -s PARTUUID -o value $partition2) rw zswap.enabled=0 nowatchdog loglevel=3 quiet splash" >> /boot/loader/entries/arch.conf
 
   mkinitcpio -P
   pacman -Syu --noconfirm
