@@ -387,10 +387,10 @@ configure_system() {
 
   # Hosts configuration
   echo -e "##
-# Host Database
+# Hosts
 #
 # localhost is used to configure the loopback interface
-# when the system is booting.  Do not change this entry.
+# during system boot. Do not change this entry.
 ##
 127.0.0.1       localhost
 ::1             localhost ip6-localhost ip6-loopback
