@@ -430,7 +430,7 @@ ff02::2         ip6-allrouters
 -------------------------------------------------------------------------
 "
   bootctl install
-  echo "default @saved\ntimeout 5\nconsole-mode auto" > /boot/loader/loader.conf
+  echo -e "default @saved\ntimeout 5\nconsole-mode auto" > /boot/loader/loader.conf
   echo "title Arch Linux" >> /boot/loader/entries/arch.conf
   echo "linux /vmlinuz-linux-zen" >> /boot/loader/entries/arch.conf
   if [ "$vendor" = "GenuineIntel" ]; then
