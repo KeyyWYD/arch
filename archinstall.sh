@@ -1,57 +1,57 @@
 #!/usr/bin/env bash
 
 # Wifi
-network() {
-  while ! ping -c 1 example.com &>/dev/null; do
-    echo -e "No network connection detected.\n"
+# network() {
+#   while ! ping -c 1 example.com &>/dev/null; do
+#     echo -e "No network connection detected.\n"
 
-    while true; do
-      echo "Would you like to connect using Wi-Fi? [Y/N]: "
-      read -r choice
+#     while true; do
+#       echo "Would you like to connect using Wi-Fi? [Y/N]: "
+#       read -r choice
 
-      case "$choice" in
-        [yY] | [yY][eE][sS])
-          while true; do
-            iwctl station list
-            echo "Please enter station name: "
-            read -r station
+#       case "$choice" in
+#         [yY] | [yY][eE][sS])
+#           while true; do
+#             iwctl station list
+#             echo "Please enter station name: "
+#             read -r station
 
-            echo -e "\nPlease enter network name (SSID): "
-            read -r netssid
+#             echo -e "\nPlease enter network name (SSID): "
+#             read -r netssid
 
-            echo -e "\nEnter password: "
-            read -r netpwd
+#             echo -e "\nEnter password: "
+#             read -r netpwd
 
-            echo -e "\nAttempting to connect to $netssid..."
+#             echo -e "\nAttempting to connect to $netssid..."
 
-            # Connect to the Wi-Fi network
-            # iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
-            if iwctl --passphrase "$netpwd" station "$station" connect "$netssid"; then
-              echo -e "\nConnected to $netssid."
-              break  # Exit the inner loop if connection is successful
-            else
-              echo -e "\nFailed to connect to $netssid. Please try again."
-              sleep 5
-              echo -e "\033c"
-            fi
-          done
-          break
-          ;;
-        [nN] | [nN][oO])
-          echo -e "\nRechecking network..."
-          break
-          ;;
-        *)
-          echo -e "\nInvalid option. Please enter [Yes/No]."
-          ;;
-      esac
-    done
-    # Wait a few seconds before checking the connection again
-    sleep 2
-  done
+#             # Connect to the Wi-Fi network
+#             # iwctl --passphrase "$netpwd" station "$station" connect "$netssid"
+#             if iwctl --passphrase "$netpwd" station "$station" connect "$netssid"; then
+#               echo -e "\nConnected to $netssid."
+#               break  # Exit the inner loop if connection is successful
+#             else
+#               echo -e "\nFailed to connect to $netssid. Please try again."
+#               sleep 5
+#               echo -e "\033c"
+#             fi
+#           done
+#           break
+#           ;;
+#         [nN] | [nN][oO])
+#           echo -e "\nRechecking network..."
+#           break
+#           ;;
+#         *)
+#           echo -e "\nInvalid option. Please enter [Yes/No]."
+#           ;;
+#       esac
+#     done
+#     # Wait a few seconds before checking the connection again
+#     sleep 2
+#   done
 
-  echo -e "Network connection established.\n"
-}
+#   echo -e "Network connection established.\n"
+# }
 
 
 timezone() {
@@ -467,7 +467,7 @@ main() {
 EOF
 
   timedatectl set-ntp true
-  network
+  # network
   timezone
   format_and_mount
   install_base_system
